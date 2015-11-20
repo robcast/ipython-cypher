@@ -2,8 +2,8 @@
 import re
 from IPython.core.magic import (Magics, magics_class, cell_magic, line_magic,
                                 needs_local_scope)
-from IPython.config.configurable import Configurable
-from IPython.utils.traitlets import Bool, Int, Unicode
+from traitlets.config.configurable import Configurable
+from traitlets import Bool, Int, Unicode
 try:
     from pandas.core.frame import DataFrame, Series
 except ImportError:
@@ -15,7 +15,7 @@ from neo4jrestclient.exceptions import StatusException
 from cypher.connection import Connection
 from cypher.parse import parse
 from cypher.run import run
-from cypher.utils import defaults
+from cypher.utils import defaults, DefaultConfigurable
 
 
 @magics_class
@@ -106,6 +106,56 @@ class CypherMagic(Magics, Configurable):
             return self._persist_dataframe(parsed['cypher'], conn, user_ns)
         try:
             result = run(parsed['cypher'], user_ns, self, conn)
+            return result
+        except StatusException as e:
+            if self.short_errors:
+                print(e)
+            else:
+                raise
+
+    @needs_local_scope
+    @line_magic('cyphergraph')
+    @cell_magic('cyphergraph')
+    def execute_graph(self, line, cell='', local_ns={}):
+        """Runs Cypher statement against a Neo4j graph database, specified by
+        a connect string.
+
+        If no database connection has been established, first word
+        should be a connection string, or the user@host name
+        of an established connection. Otherwise, http://localhost:7474/db/data
+        will be assumed.
+
+        Examples::
+
+          %%cyphergraph https://me:mypw@myhost:7474/db/data
+          START n=node(*) RETURN n
+
+          %%cyphergraph me@myhost
+          START n=node(*) RETURN n
+
+          %%cyphergraph
+          START n=node(*) RETURN n
+
+        Connect string syntax examples:
+
+          http://localhost:7474/db/data
+          https://me:mypw@localhost:7474/db/data
+
+        """
+        # save globals and locals so they can be referenced in bind vars
+        user_ns = self.shell.user_ns
+        user_ns.update(local_ns)
+        parsed = parse("""{0}\n{1}""".format(line, cell), self)
+        conn = Connection.get(parsed['as'] or parsed['uri'])
+        first_word = parsed['cypher'].split(None, 1)[:1]
+        try:
+            # pass all attributes except auto_html manually to new config :-(
+            conf = DefaultConfigurable(auto_html=True, 
+                                       auto_limit=self.auto_limit, style=self.style, short_errors=self.short_errors,
+                                       data_contents=self.data_contents, display_limit=self.display_limit, 
+                                       auto_networkx=self.auto_networkx, auto_pandas=self.auto_pandas, rest=self.rest,
+                                       feedback=self.feedback, uri=self.uri)
+            result = run(parsed['cypher'], user_ns, conf, conn)
             return result
         except StatusException as e:
             if self.short_errors:
