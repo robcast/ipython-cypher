@@ -2,20 +2,24 @@
 import re
 from IPython.core.magic import (Magics, magics_class, cell_magic, line_magic,
                                 needs_local_scope)
-from traitlets.config.configurable import Configurable
-from traitlets import Bool, Int, Unicode
 try:
     from pandas.core.frame import DataFrame, Series
 except ImportError:
     DataFrame = None
     Series = None
+try:
+    from traitlets import Bool, Int, Unicode
+    from traitlets.config.configurable import Configurable
+except ImportError:
+    from IPython.config.configurable import Configurable
+    from IPython.utils.traitlets import Bool, Int, Unicode
 
 from neo4jrestclient.exceptions import StatusException
 
 from cypher.connection import Connection
 from cypher.parse import parse
 from cypher.run import run
-from cypher.utils import defaults, DefaultConfigurable
+from cypher.utils import defaults
 
 
 @magics_class
